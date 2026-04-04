@@ -16,36 +16,56 @@ else
     exit 1
 fi
 
-# --- 2. 检查是否已安装 (已安装则直接弹菜单) ---
-if [ -f "/usr/bin/xray2_core" ]; then
-    bash <(curl -sL https://raw.githubusercontent.com/wyx2685/V2bX-script/master/install.sh) | sed 's/V2bX/Xray2/g'
-    exit 0
-fi
-
-# --- 3. 首次安装逻辑 ---
-echo "正在为您部署 Xray2 核心..."
-mkdir -p /usr/local/Xray2 /etc/Xray2
-# 强制拉取确定的内核
-wget -O /usr/local/Xray2/core.zip https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/core.zip
-apt install unzip -y
-unzip -o /usr/local/Xray2/core.zip -d /usr/local/Xray2/
-chmod +x /usr/local/Xray2/V2bX
-ln -sf /usr/local/Xray2/V2bX /usr/bin/xray2_core
-
-# 写入菜单快捷方式
-cat > /usr/bin/xray2 <<'INNER'
+# --- 2. 写入永久管理菜单 (不再去 GitHub 下脚本，直接本地化) ---
+# 我们把管理逻辑直接塞进 /usr/bin/xray2
+cat > /usr/bin/xray2 <<'MENU'
 #!/bin/bash
-bash <(curl -sL https://raw.githubusercontent.com/wyx2685/V2bX-script/master/install.sh) | sed 's/V2bX/Xray2/g'
-INNER
+# 简单的管理菜单逻辑
+show_menu() {
+    clear
+    echo "Xray2 商业版管理快捷菜单"
+    echo "------------------------"
+    echo "1. 重启 Xray2"
+    echo "2. 停止 Xray2"
+    echo "3. 查看 实时日志 (对接检查)"
+    echo "4. 修改 配置文件 (对接面板)"
+    echo "0. 退出"
+    echo "------------------------"
+    read -p "请选择: " num
+    case $num in
+        1) systemctl restart xray2 ;;
+        2) systemctl stop xray2 ;;
+        3) journalctl -u xray2 -f ;;
+        4) nano /etc/Xray2/config.yml ;;
+        *) exit ;;
+    esac
+}
+
+if [ $# -gt 0 ]; then
+    case $1 in
+        restart) systemctl restart xray2 ;;
+        log) journalctl -u xray2 -f ;;
+        *) echo "未知参数" ;;
+    esac
+else
+    show_menu
+fi
+MENU
 chmod +x /usr/bin/xray2
 
-# 写入系统服务
+# --- 3. 部署核心和服务 ---
+mkdir -p /usr/local/Xray2 /etc/Xray2
+wget -O /usr/local/Xray2/core.zip https://gh-proxy.com/https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/core.zip
+apt install unzip nano -y
+unzip -o /usr/local/Xray2/core.zip -d /usr/local/Xray2/
+chmod +x /usr/local/Xray2/V2bX
+
 cat > /etc/systemd/system/xray2.service <<SERVICES
 [Unit]
 Description=Xray2 Service
 After=network.target
 [Service]
-ExecStart=/usr/bin/xray2_core -config /etc/Xray2/config.yml
+ExecStart=/usr/local/Xray2/V2bX -config /etc/Xray2/config.yml
 Restart=on-failure
 [Install]
 WantedBy=multi-user.target
@@ -55,4 +75,7 @@ systemctl daemon-reload
 systemctl enable xray2
 systemctl restart xray2
 
-echo "安装完成！直接输入 xray2 呼出菜单。"
+echo "==============================================="
+echo "   安装成功！直接输入 xray2 即可管理。"
+echo "   请按 4 修改配置对接 V2Board 面板。"
+echo "==============================================="
