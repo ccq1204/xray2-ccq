@@ -1,41 +1,35 @@
 #!/bin/bash
-
-# --- 1. 定义变量 (私有化) ---
-NAME="Xray2"
 BIN_PATH="/usr/local/Xray2"
 CONF_PATH="/etc/Xray2"
-# 强制指定稳定的核心下载地址
-CORE_URL="https://github.com/wyx2685/V2bX/releases/download/v1.5.5/V2bX-linux-64.zip"
+# 以后只走你自己的私有源，再也不看作者脸色
+CORE_URL="https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/core.zip"
 
-echo "开始安装 $NAME 商业版..."
-
-# --- 2. 准备环境 ---
+echo "正在部署 Xray2 商业版 (基于 v0.4.0 内核)..."
 mkdir -p $BIN_PATH $CONF_PATH
 apt update && apt install unzip wget curl -y
 
-# --- 3. 下载并静默解压 ---
+# 下载你仓库里的 core.zip
 wget -O $BIN_PATH/core.zip $CORE_URL
+
+# 解压
 unzip -o $BIN_PATH/core.zip -d $BIN_PATH/
+# 根据截图，解压出来的二进制文件名应该叫 V2bX
 chmod +x $BIN_PATH/V2bX
-# 建立软链接，让命令变成 xray2
 ln -sf $BIN_PATH/V2bX /usr/bin/xray2
 
-# --- 4. 自动注入你的黄金配置 ---
-if [ -f "./conf/config.yml" ]; then
+# 复制你的商业配置
+if [ -d "./conf" ]; then
     cp ./conf/config.yml $CONF_PATH/config.yml
-    echo "已自动同步您的商业对接配置。"
 fi
 
-# --- 5. 写入 Systemd 服务 (换壳为 Xray2) ---
+# 写入 Systemd 服务
 cat > /etc/systemd/system/xray2.service <<SERVICES
 [Unit]
 Description=Xray2 Service
 After=network.target
-
 [Service]
-ExecStart=$BIN_PATH/V2bX -config $CONF_PATH/config.yml
+ExecStart=/usr/bin/xray2 -config $CONF_PATH/config.yml
 Restart=on-failure
-
 [Install]
 WantedBy=multi-user.target
 SERVICES
@@ -43,8 +37,4 @@ SERVICES
 systemctl daemon-reload
 systemctl enable xray2
 systemctl restart xray2
-
-echo "==============================================="
-echo "   $NAME 安装完成！"
-echo "   管理命令: xray2 (start|stop|restart|log)"
-echo "==============================================="
+echo "安装成功！输入 xray2 即可看到程序响应。"
