@@ -1,19 +1,19 @@
 #!/bin/bash
 BIN_PATH="/usr/local/Xray2"
 CONF_PATH="/etc/Xray2"
-# 以后只走你自己的私有源，再也不看作者脸色
+# 核心：走你自己的 GitHub 链接
 CORE_URL="https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/core.zip"
 
-echo "正在部署 Xray2 商业版 (基于 v0.4.0 内核)..."
+echo "正在部署 Xray2 商业版 (v0.4.0 内核)..."
 mkdir -p $BIN_PATH $CONF_PATH
 apt update && apt install unzip wget curl -y
 
 # 下载你仓库里的 core.zip
 wget -O $BIN_PATH/core.zip $CORE_URL
 
-# 解压
+# 解压并重命名
 unzip -o $BIN_PATH/core.zip -d $BIN_PATH/
-# 根据截图，解压出来的二进制文件名应该叫 V2bX
+# 截图显示解压后名字是 V2bX
 chmod +x $BIN_PATH/V2bX
 ln -sf $BIN_PATH/V2bX /usr/bin/xray2
 
@@ -37,4 +37,4 @@ SERVICES
 systemctl daemon-reload
 systemctl enable xray2
 systemctl restart xray2
-echo "安装成功！输入 xray2 即可看到程序响应。"
+echo "部署完成！输入 xray2 即可测试。"
