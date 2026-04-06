@@ -17,27 +17,39 @@ read -p "请输入面板 KEY: " MY_KEY
 read -p "请输入节点 ID: " MY_ID
 read -p "请输入解析后的域名: " MY_DOMAIN
 
-# 3. 验证授权 (加入浏览器伪装，绕过防火墙拦截)
+# 3. 验证授权 (使用 787 域名并加入浏览器伪装)
 echo "正在发起云端验证..."
+# 定义伪装浏览器头，防止被 Nginx 防火墙拦截
 UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-CONF_DATA=$(curl -sLk -A "$UA" "https://787.7788.gg/check.php?code=$LICENSE")
+# 发起请求
+CONF_DATA=$(curl -sLk -A "$UA" "http://787.7788.gg/check.php?code=$LICENSE")
+
+# 调试显示验证反馈 (成功后可自行删除这三行)
+echo "-------------------------------------------"
+echo "验证反馈: [${CONF_DATA}]"
+echo "-------------------------------------------"
 
 if [[ "$CONF_DATA" == *"success"* ]]; then
-    echo "-------------------------------------------"
-    echo "✅ 授权验证通过！开始安装..."
-    echo "-------------------------------------------"
+    echo "✅ 授权验证通过！准备开始安装..."
     
-    # 4. 环境清理
+    # 4. 环境清理与目录准备
+    echo "清理旧环境..."
     systemctl stop xray2 2>/dev/null
+    systemctl disable xray2 2>/dev/null
     rm -rf /usr/local/xray2 /etc/xray2
     mkdir -p /etc/xray2 /usr/local/xray2
 
-    # 5. 下载核心
-    echo "正在拉取核心程序 (89MB)..."
+    # 5. 下载核心程序
+    echo "正在从云端拉取商业版核心 (89MB)..."
     wget --progress=dot:giga -O /usr/local/xray2/xray2 https://github.com/ccq1204/xray2-ccq/releases/download/v0.4.0/xray2
+    if [ ! -f "/usr/local/xray2/xray2" ]; then
+        echo "❌ 核心下载失败，请检查网络或 GitHub 链接！"
+        exit 1
+    fi
     chmod +x /usr/local/xray2/xray2
 
-    # 6. 写入配置
+    # 6. 写入配置文件
+    echo "正在写入节点配置..."
     cat <<EOF >/etc/xray2/config.json
 {
   "Log": { "Level": "none" },
@@ -57,38 +69,44 @@ if [[ "$CONF_DATA" == *"success"* ]]; then
   }]
 }
 EOF
-    # 锁定配置
+    # 锁定配置文件，防止篡改
     chattr +i /etc/xray2/config.json 2>/dev/null
 
-    # 7. 下载菜单
+    # 7. 下载并安装管理菜单 (xray2.sh)
+    echo "正在安装管理脚本..."
     wget -O /usr/bin/xray2 https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/xray2.sh
     chmod +x /usr/bin/xray2
 
-    # 8. 写入服务并启动
+    # 8. 写入 Systemd 服务项
+    echo "配置系统服务..."
     cat <<EOF >/etc/systemd/system/xray2.service
 [Unit]
 Description=xray2 Service
 After=network.target
+
 [Service]
 Type=simple
 WorkingDirectory=/usr/local/xray2
 ExecStart=/usr/local/xray2/xray2 -config /etc/xray2/config.json
 Restart=on-failure
+
 [Install]
 WantedBy=multi-user.target
 EOF
 
+    # 9. 重启服务并设置开机自启
     systemctl daemon-reload
     systemctl enable xray2
     systemctl restart xray2
 
     echo "-------------------------------------------"
-    echo "🎉 xray2 商业版安装成功！"
-    echo "输入 xray2 即可呼出管理菜单"
+    echo "🎉 xray2 商业加速版安装成功！"
+    echo "使用说明: 输入 xray2 即可呼出管理菜单"
     echo "-------------------------------------------"
 
 else
+    # 验证失败的处理
     echo "❌ 验证失败！服务器返回: [$CONF_DATA]"
-    echo "提示：请检查母机防火墙是否拦截了当前 VPS 的 IP。"
+    echo "提示：请确保母机后台已生成该授权码，且母机网络未阻断当前 IP。"
     exit 1
 fi
