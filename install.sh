@@ -19,13 +19,21 @@ read -p "请输入解析后的域名: " MY_DOMAIN
 
 # 3. 验证授权
 echo "正在验证授权..."
-# 发起请求
-CONF_DATA=$(curl -s "https://00.7788.gg/check.php?code=$LICENSE&api=$MY_API&key=$MY_KEY&node=$MY_ID&domain=$MY_DOMAIN")
+echo "正在发起验证请求..."
+# 使用 -i 参数可以看到完整的 HTTP 响应头
+CONF_DATA=$(curl -s "https://00.7788.gg/check.php?code=$LICENSE")
 
-# 检查返回内容是否包含 success
+# 【调试代码】打印服务器返回的真实内容
+echo "--------------------------------"
+echo "服务器原始返回内容: [${CONF_DATA}]"
+echo "--------------------------------"
+
 if [[ "$CONF_DATA" == *"success"* ]]; then
-    echo "授权验证通过！"
+    echo "检测到 success 关键字，验证通过！"
 else
+    echo "未检测到 success 关键字，验证失败！"
+    exit 1
+fi
     echo "授权验证失败！服务器返回: [$CONF_DATA]"
     exit 1
 fi
