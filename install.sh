@@ -21,23 +21,23 @@ read -p "请输入解析后的域名: " MY_DOMAIN
 echo "正在发起云端验证..."
 # 定义伪装浏览器头，防止被 Nginx 防火墙拦截
 UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-# 发起请求
-CONF_DATA=$(curl -sLk -A "$UA" "http://787.7788.gg/check.php?code=$LICENSE")
+# 3. 验证授权
+echo "正在发起云端验证..."
 
-# 调试显示验证反馈 (成功后可自行删除这三行)
+# 1. 强制 IPv4 (-4) 
+# 2. 模拟 Chrome 浏览器
+# 3. 增加超时重试
+# 4. 这里的域名请务必确认是 http://787.7788.gg (不要用 https 减少报错概率)
+CONF_DATA=$(curl -4 -sLk -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --connect-timeout 10 "http://787.7788.gg/check.php?code=$LICENSE" | tr -d '\r\n')
+
+# 调试显示（一定要加这两行括号，看看到底有没有空格）
 echo "-------------------------------------------"
-echo "验证反馈: [${CONF_DATA}]"
+echo "验证反馈内容: [${CONF_DATA}]"
 echo "-------------------------------------------"
 
 if [[ "$CONF_DATA" == *"success"* ]]; then
     echo "✅ 授权验证通过！准备开始安装..."
-    
-    # 4. 环境清理与目录准备
-    echo "清理旧环境..."
-    systemctl stop xray2 2>/dev/null
-    systemctl disable xray2 2>/dev/null
-    rm -rf /usr/local/xray2 /etc/xray2
-    mkdir -p /etc/xray2 /usr/local/xray2
+    # ... 后面接安装逻辑 ...
 
     # 5. 下载核心程序
     echo "正在从云端拉取商业版核心 (89MB)..."
