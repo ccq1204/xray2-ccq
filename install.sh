@@ -26,7 +26,7 @@ fi
 # 开始安装
 mkdir -p /etc/xray2 /usr/local/xray2
 # 下载你预编译改名后的二进制文件
-wget -O /usr/local/xray2/xray2 https://github.com/你的名/xray2/releases/latest/download/xray2
+wget -O /usr/local/xray2/xray2 https://github.com/ccq1204/xray2-ccq/releases/download/v0.4.0/xray2
 chmod +x /usr/local/xray2/xray2
 
 # 写入混淆配置并锁死
