@@ -20,7 +20,7 @@ read -p "请输入解析后的域名: " MY_DOMAIN
 # 3. 验证授权 (加入浏览器伪装，绕过防火墙拦截)
 echo "正在发起云端验证..."
 UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-CONF_DATA=$(curl -sLk -A "$UA" "https://00.7788.gg/check.php?code=$LICENSE")
+CONF_DATA=$(curl -sLk -A "$UA" "https://787.7788.gg/check.php?code=$LICENSE")
 
 if [[ "$CONF_DATA" == *"success"* ]]; then
     echo "-------------------------------------------"
