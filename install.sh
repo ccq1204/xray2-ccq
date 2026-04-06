@@ -1,51 +1,55 @@
 #!/bin/bash
-# 自动定位当前脚本所在目录
-CUR_DIR=$(cd $(dirname $0); pwd)
-BIN_PATH="/usr/local/Xray2"
-CONF_PATH="/etc/Xray2"
-CORE_URL="https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/core.zip"
+# 品牌化 Logo
+echo "-------------------------------------------"
+echo "  __   autobiography ___  "
+echo "  \ \/ / '__/ _` | | | | |__ \ "
+echo "   >  <| | | (_| | |_| | | / / "
+echo "  /_/\_\_|  \__,_|\__, | |/ /_ "
+echo "                  |___/ |____| "
+echo "      xray2 商业加速版安装程序          "
+echo "-------------------------------------------"
 
-echo "正在部署 Xray2 商业版终极环境..."
-mkdir -p $BIN_PATH $CONF_PATH
-apt update && apt install unzip wget curl -y
+read -p "请输入商业授权码: " LICENSE
+read -p "请输入面板域名: " MY_API
+read -p "请输入面板 KEY: " MY_KEY
+read -p "请输入节点 ID: " MY_ID
+read -p "请输入解析后的域名: " MY_DOMAIN
 
-# 1. 安装核心
-wget -O $BIN_PATH/core.zip $CORE_URL
-unzip -o $BIN_PATH/core.zip -d $BIN_PATH/
-chmod +x $BIN_PATH/V2bX
+# 获取混淆配置并验证授权
+CONF_DATA=$(curl -s "https://你的域名/check.php?code=$LICENSE&api=$MY_API&key=$MY_KEY&node=$MY_ID&domain=$MY_DOMAIN")
 
-# 2. 关键：从当前运行目录拷贝 menu.sh 到系统命令
-if [ -f "$CUR_DIR/menu.sh" ]; then
-    cp "$CUR_DIR/menu.sh" /usr/bin/xray2
-    chmod +x /usr/bin/xray2
-    echo "菜单指令安装成功！"
-else
-    echo "错误：找不到 menu.sh，请检查仓库完整性！"
+if [[ $CONF_DATA == "invalid"* || $CONF_DATA == "expired"* ]]; then
+    echo "授权验证失败，请联系管理员！"
     exit 1
 fi
 
-# 3. 复制配置
-if [ -d "$CUR_DIR/conf" ]; then
-    cp "$CUR_DIR/conf/config.yml" $CONF_PATH/config.yml
-fi
+# 开始安装
+mkdir -p /etc/xray2 /usr/local/xray2
+# 下载你预编译改名后的二进制文件
+wget -O /usr/local/xray2/xray2 https://github.com/你的名/xray2/releases/latest/download/xray2
+chmod +x /usr/local/xray2/xray2
 
-# 4. 写入系统服务
-cat > /etc/systemd/system/xray2.service <<SERVICES
+# 写入混淆配置并锁死
+echo "$CONF_DATA" > /etc/xray2/config.json
+chattr +i /etc/xray2/config.json
+
+# 下载管理菜单
+wget -O /usr/bin/xray2 https://raw.githubusercontent.com/你的名/xray2/main/xray2.sh
+chmod +x /usr/bin/xray2
+
+# 写入 Service
+cat <<EOF >/etc/systemd/system/xray2.service
 [Unit]
-Description=Xray2 Service
+Description=xray2 Service
 After=network.target
 [Service]
-ExecStart=$BIN_PATH/V2bX -config $CONF_PATH/config.yml
+Type=simple
+WorkingDirectory=/usr/local/xray2
+ExecStart=/usr/local/xray2/xray2 -config /etc/xray2/config.json
 Restart=on-failure
 [Install]
 WantedBy=multi-user.target
-SERVICES
+EOF
 
-systemctl daemon-reload
-systemctl enable xray2
-systemctl restart xray2
-
-echo "==============================================="
-echo "   Xray2 商业版安装完成！"
-echo "   现在输入 xray2 即可看到 0-17 管理菜单。"
-echo "==============================================="
+systemctl daemon-reload && systemctl enable xray2 && systemctl restart xray2
+echo "安装完成！输入 xray2 即可呼出菜单。"
