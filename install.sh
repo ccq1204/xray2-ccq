@@ -19,7 +19,7 @@ read -p "请输入解析后的域名: " MY_DOMAIN
 
 # 3. 验证授权
 echo "正在发起云端验证..."
-CONF_DATA=$(curl -s "https://00.7788.gg/check.php?code=$LICENSE")
+CONF_DATA=$(curl -s "http://43.165.185.56:4441/check.php?code=$LICENSE")
 
 if [[ "$CONF_DATA" == *"success"* ]]; then
     echo "-------------------------------------------"
