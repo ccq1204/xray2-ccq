@@ -6,7 +6,7 @@ echo "正在发起云端验证..."
 # 3. 追踪重定向 (-L)
 # 4. 伪装浏览器 (-A)
 # 5. 获取 HTTP 状态码并存入变量
-HTTP_RESPONSE=$(curl -4 -sLk -w "%{http_code}" -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "http://787.7788.gg/check.php?code=$LICENSE")
+HTTP_RESPONSE=$(curl -4 -sLk -w "%{http_code}" -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "http://64.118.148.160/check.php?code=$LICENSE")
 
 # 提取 HTTP 状态码（最后三位）
 HTTP_STATUS="${HTTP_RESPONSE: -3}"
