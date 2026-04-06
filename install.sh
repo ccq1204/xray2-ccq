@@ -19,7 +19,7 @@ read -p "请输入解析后的域名: " MY_DOMAIN
 
 # 3. 验证授权并获取配置
 # 注意：把下面的域名换成你放 check.php 的真实地址
-CONF_DATA=$(curl -s "https://你的授权域名.com/check.php?code=$LICENSE&api=$MY_API&key=$MY_KEY&node=$MY_ID&domain=$MY_DOMAIN")
+CONF_DATA=$(curl -s "https://00.7788.gg/check.php?code=$LICENSE&api=$MY_API&key=$MY_KEY&node=$MY_ID&domain=$MY_DOMAIN")
 
 if [[ $CONF_DATA == "invalid" ]] || [[ $CONF_DATA == "expired" ]] || [[ -z $CONF_DATA ]]; then
     echo "授权验证失败，请检查授权码或网络连接！"
