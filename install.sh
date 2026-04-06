@@ -18,43 +18,30 @@ read -p "请输入节点 ID: " MY_ID
 read -p "请输入解析后的域名: " MY_DOMAIN
 
 # 3. 验证授权
-echo "正在验证授权..."
-echo "正在发起验证请求..."
-# 使用 -i 参数可以看到完整的 HTTP 响应头
+echo "正在发起云端验证..."
 CONF_DATA=$(curl -s "https://00.7788.gg/check.php?code=$LICENSE")
 
-# 【调试代码】打印服务器返回的真实内容
-echo "--------------------------------"
-echo "服务器原始返回内容: [${CONF_DATA}]"
-echo "--------------------------------"
-
 if [[ "$CONF_DATA" == *"success"* ]]; then
-    echo "检测到 success 关键字，验证通过！"
+    echo "-------------------------------------------"
+    echo "✅ 授权验证通过！开始安装..."
+    echo "-------------------------------------------"
 else
-    echo "未检测到 success 关键字，验证失败！"
+    echo "❌ 授权验证失败！服务器返回: [$CONF_DATA]"
     exit 1
 fi
-    echo "授权验证失败！服务器返回: [$CONF_DATA]"
-    exit 1
-fi
-
-# --- 修正点：原脚本在这里多出的 fi 和 exit 1 已被删除 ---
 
 # 4. 环境清理与准备
-echo "清理旧环境..."
 systemctl stop xray2 2>/dev/null
 systemctl stop V2bX 2>/dev/null
 rm -rf /usr/local/xray2 /etc/xray2
 mkdir -p /etc/xray2 /usr/local/xray2
 
-# 5. 下载你编译的 89M 核心
+# 5. 下载核心程序
 echo "正在从云端拉取核心程序 (89MB)..."
 wget --progress=dot:giga -O /usr/local/xray2/xray2 https://github.com/ccq1204/xray2-ccq/releases/download/v0.4.0/xray2
 chmod +x /usr/local/xray2/xray2
 
-# 6. 写入混淆配置
-# 这里的配置你可以根据需要让 check.php 直接返回 JSON，或者在这里写死模板
-# 既然 check.php 只返回 success，我们在这里手动生成配置
+# 6. 写入配置文件
 cat <<EOF >/etc/xray2/config.json
 {
   "Log": { "Level": "none" },
@@ -104,6 +91,6 @@ systemctl enable xray2
 systemctl restart xray2
 
 echo "-------------------------------------------"
-echo "xray2 安装成功！"
-echo "输入 xray2 即可呼出管理菜单"
+echo "🎉 xray2 商业版安装成功！"
+echo "使用说明: 输入 xray2 呼出管理菜单"
 echo "-------------------------------------------"
