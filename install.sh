@@ -20,7 +20,7 @@ read -p "请输入解析后的域名: " MY_DOMAIN
 # 验证授权
 echo "正在发起云端验证..."
 # 构造请求 URL，确保变量被正确包裹
-AUTH_URL="http://787.7788.gg/check.php?code=${LICENSE}"
+AUTH_URL="https://787.7788.gg/check.php?code=${LICENSE}"
 UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 # 发起请求并清洗结果
