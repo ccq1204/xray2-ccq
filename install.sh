@@ -1,11 +1,3 @@
-#!/bin/bash
-
-# --- [ 1. 商业配置 ] ---
-AD_URL="0000.7788.gg"
-AD_TG="@jzllzf"
-BRAND_NAME="xray2"
-AUTH_DB="https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/auth_md5.txt"
-
 # --- [ 2. 授权验证逻辑 ] ---
 clear
 echo "======================================================"
@@ -16,20 +8,23 @@ echo "  官方 Telegram 频道: $AD_TG"
 echo "------------------------------------------------------"
 read -p "请输入您的授权码 (Auth Key): " USER_INPUT
 
-# 1. 计算输入码的 MD5 (确保没有换行符)
+# 1. 计算输入码的 MD5
 USER_MD5=$(echo -n "$USER_INPUT" | md5sum | cut -d ' ' -f 1)
 
-# 2. 核心修复：获取远程列表，强行剔除所有换行 (\r \n) 和空格，合并成一行
-AUTH_LIST=$(curl -Ls "$AUTH_DB" | tr -d '\n\r ' | xargs)
+# 2. 强制获取最新列表并清洗
+# 请确保这里的变量名 AUTH_DB 和你开头定义的一样
+AUTH_LIST=$(curl -H "Cache-Control: no-cache" -Ls "$AUTH_DB" | tr -d '\n\r ' | xargs)
 
-# 3. 匹配 (只要用户的 MD5 在这串乱码里出现过就行)
-if [[ "$AUTH_LIST" != *"$USER_MD5"* ]]; then
+# 3. 使用 grep 匹配 (Linux 下最稳的方式)
+if echo "$AUTH_LIST" | grep -q "$USER_MD5"; then
+    echo "✅ 授权验证成功，欢迎使用极昼流量转发系统！"
+else
     echo "❌ 授权验证失败！请访问 $AD_URL 获取授权。"
+    # 如果还是失败，可以把下面这行解封，看看服务器到底读到了什么
+    # echo "DEBUG: Remote MD5 is [$AUTH_LIST]"
     exit 1
 fi
-
-echo "✅ 授权验证成功，欢迎使用极昼流量转发系统！"
-echo "======================================================"
+echo "------------------------------------------------------"
 
 # --- [ 3. 环境准备 ] ---
 apt-get update -y && apt-get install -y curl wget tar unzip
