@@ -1,43 +1,46 @@
 #!/bin/bash
 
-# --- 1. 环境预处理：确保有基础工具 ---
+# --- 1. 环境自愈：安装基础依赖 ---
 apt-get update -y && apt-get install -y curl wget tar unzip
 
-# 修复管道执行时键盘输入失效的问题
+# 修复管道执行时键盘输入失效
 exec < /dev/tty
 
 echo "======================================"
-echo "      V2bX [终极修正版] 部署向导"
+echo "      V2bX [全自动] 部署向导"
+echo "  (系统更新 + BBR开启 + 核心安装)"
 echo "======================================"
 
-# --- 2. 开启 BBR 加速 (优化网络) ---
+# --- 2. 开启 BBR 加速 ---
 if ! lsmod | grep -q bbr; then
     echo "正在开启 BBR 加速..."
     echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
     echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
     sysctl -p
+    echo "✅ BBR 加速已激活"
+else
+    echo "ℹ️ BBR 已经处于开启状态"
 fi
 
-# --- 3. 获取用户输入参数 ---
+# --- 3. 获取用户参数 ---
 read -p "1. 请输入面板地址 (如 http://1.2.3.4:1007): " PANEL_URL
 read -p "2. 请输入面板 API Key: " PANEL_KEY
 read -p "3. 请输入节点 ID (Node ID): " NODE_ID
 read -p "4. 请输入节点域名 (CertDomain): " CERT_DOMAIN
 echo "======================================"
 
-# --- 4. 安装 V2bX 程序并建立系统命令 ---
-echo "正在下载 V2bX 核心程序..."
+# --- 4. 暴力安装 V2bX 程序并建立系统命令 ---
+echo "正在从 GitHub 获取 V2bX 核心..."
 mkdir -p /usr/local/V2bX
-# 强制下载 v0.4.0 稳定版
 wget -O /usr/local/V2bX/V2bX-linux.zip https://github.com/wyx2685/V2bX/releases/download/v0.4.0/V2bX-linux-64.zip
 unzip -o /usr/local/V2bX/V2bX-linux.zip -d /usr/local/V2bX
 chmod +x /usr/local/V2bX/V2bX
 
-# 建立全局软链接，防止 command not found
+# 建立全局软链接
 ln -sf /usr/local/V2bX/V2bX /usr/bin/V2bX
 ln -sf /usr/local/V2bX/V2bX /usr/bin/v2bx
 
-# --- 5. 写入主配置文件 (修复变量替换逻辑) ---
+# --- 5. 写入主配置文件 (修正 CertMode 为 none 解决崩溃) ---
 mkdir -p /etc/V2bX
 cat <<EOF > /etc/V2bX/config.json
 {
@@ -62,34 +65,31 @@ cat <<EOF > /etc/V2bX/config.json
             "TCPFastOpen": true,
             "SniffEnabled": true,
             "CertConfig": {
-                "CertMode": "11",
+                "CertMode": "none",
                 "RejectUnknownSni": false,
                 "CertDomain": "${CERT_DOMAIN}",
-                "CertFile": "/etc/V2bX/fullchain.cer",
-                "KeyFile": "/etc/V2bX/cert.key",
-                "Email": "v2bx@github.com",
-                "Provider": "cloudflare",
-                "DNSEnv": { "EnvName": "env1" }
+                "Email": "v2bx@github.com"
             }
     }]
 }
 EOF
 
-# --- 6. 强制拉取 GitHub 规则文件 (修复 EOF 报错) ---
-echo "正在同步核心规则文件..."
-# 直接使用写死的 URL，防止变量解析失败
-wget -t 3 -T 10 -O /etc/V2bX/sing_origin.json https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/sing_origin.json
-wget -t 3 -T 10 -O /etc/V2bX/route.json https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/route.json
-wget -t 3 -T 10 -O /etc/V2bX/dns.json https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/dns.json
+# --- 6. 强制同步规则文件 (防止 EOF 错误) ---
+echo "正在拉取核心规则文件..."
+rm -f /etc/V2bX/sing_origin.json /etc/V2bX/route.json /etc/V2bX/dns.json
 
-# 如果下载后文件大小为0，则写入应急基础配置防止 EOF
+wget --no-check-certificate -O /etc/V2bX/sing_origin.json "https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/sing_origin.json"
+wget --no-check-certificate -O /etc/V2bX/route.json "https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/route.json"
+wget --no-check-certificate -O /etc/V2bX/dns.json "https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/dns.json"
+
+# 兜底校验：如果下载失败则写入基础规则
 if [ ! -s /etc/V2bX/sing_origin.json ]; then
     cat <<EOF > /etc/V2bX/sing_origin.json
 {"dns":{"servers":[{"tag":"cf","address":"1.1.1.1"}]},"route":{"rules":[{"outbound":"direct","network":["udp","tcp"]}]}}
 EOF
 fi
 
-# --- 7. 配置 Systemd 服务 (修复启动路径和参数) ---
+# --- 7. 配置 Systemd 服务 (修复启动指令) ---
 cat <<EOF > /etc/systemd/system/V2bX.service
 [Unit]
 Description=V2bX Service
@@ -118,13 +118,13 @@ esac
 EOF
 chmod +x /usr/bin/v2
 
-# --- 9. 启动并收尾 ---
+# --- 9. 启动服务 ---
 systemctl daemon-reload
 systemctl enable V2bX
 systemctl restart V2bX
 
 clear
 echo "======================================"
-echo "✅ 部署修复完成！BBR 已开启。"
+echo "✅ 部署完成！BBR 已开启。"
 echo "请执行: v2 log  查看是否 Success"
 echo "======================================"
