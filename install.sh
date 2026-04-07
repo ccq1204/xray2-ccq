@@ -1,12 +1,3 @@
-#!/bin/bash
-
-# --- [ 1. 商业配置与广告位 ] ---
-AD_URL="0000.7788.gg"
-AD_TG="@jzllzf"
-BRAND_NAME="xray2"
-# 请确保你的 GitHub 仓库里文件名确实是 auth_md5.txt
-AUTH_DB="https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/auth_md5.txt"
-
 # --- [ 2. 授权验证逻辑 ] ---
 clear
 echo "======================================================"
@@ -15,23 +6,30 @@ echo "======================================================"
 echo "  极昼流量转发官网: $AD_URL"
 echo "  官方 Telegram 频道: $AD_TG"
 echo "------------------------------------------------------"
-read -p "请输入您的授权码 (Auth Key): " USER_INPUT
+# 强制 read 命令不转义反斜杠，并手动清理输入
+read -p "请输入您的授权码 (Auth Key): " RAW_INPUT
 
-# 1. 获取输入并彻底清洗变量里的 \r 和空格，再计算 MD5
-USER_MD5=$(echo -n "$USER_INPUT" | tr -d '\r\n ' | md5sum | awk '{print $1}' | tr 'A-Z' 'a-z')
+# --- 核心修复逻辑：强力清洗变量 ---
+# 1. 用 tr 删掉所有换行、回车和空格
+# 2. 用 sed 删掉所有不可见控制字符
+CLEAN_INPUT=$(echo -n "$RAW_INPUT" | tr -d '\r\n ' | sed 's/[[:cntrl:]]//g')
 
-# 2. 强制获取最新列表并彻底清洗 (增加随机数绕过 GitHub 缓存)
-AUTH_LIST=$(curl -H "Cache-Control: no-cache" -Ls "${AUTH_DB}?v=${RANDOM}" | tr -d '\n\r ' | xargs)
+# 3. 计算清洗后的 MD5 (强制小写)
+USER_MD5=$(echo -n "$CLEAN_INPUT" | md5sum | awk '{print $1}' | tr 'A-Z' 'a-z')
 
-# 3. 匹配逻辑
+# 4. 获取远程库并清洗 (增加随机数防止 CDN 缓存)
+AUTH_LIST=$(curl -H "Cache-Control: no-cache" -Ls "${AUTH_DB}?v=${RANDOM}" | tr -d '\r\n ' | sed 's/[[:cntrl:]]//g' | xargs)
+
+# 5. 最终匹配
 if echo "$AUTH_LIST" | grep -q "$USER_MD5"; then
     echo "✅ 授权验证成功，欢迎使用极昼流量转发系统！"
 else
     echo "❌ 授权验证失败！请访问 $AD_URL 获取授权。"
     echo "------------------------------------------------------"
     echo "调试信息 (若持续失败请截图):"
-    echo "Local  MD5: [$USER_MD5]"
-    echo "Remote LIST: [${AUTH_LIST:0:20}...]" # 仅显示前20位保护隐私
+    echo "您的输入: [$CLEAN_INPUT]"
+    echo "计算结果: [$USER_MD5]"
+    echo "远程列表: [${AUTH_LIST:0:32}...]"
     echo "------------------------------------------------------"
     exit 1
 fi
