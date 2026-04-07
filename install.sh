@@ -17,8 +17,8 @@ echo "  官方 Telegram 频道: $AD_TG"
 echo "------------------------------------------------------"
 read -p "请输入您的授权码 (Auth Key): " USER_INPUT
 
-# 1. 计算输入码的 MD5 (确保小写且无空格)
-USER_MD5=$(echo -n "$USER_INPUT" | md5sum | awk '{print $1}' | tr 'A-Z' 'a-z')
+# 1. 获取输入并彻底清洗变量里的 \r 和空格，再计算 MD5
+USER_MD5=$(echo -n "$USER_INPUT" | tr -d '\r\n ' | md5sum | awk '{print $1}' | tr 'A-Z' 'a-z')
 
 # 2. 强制获取最新列表并彻底清洗 (增加随机数绕过 GitHub 缓存)
 AUTH_LIST=$(curl -H "Cache-Control: no-cache" -Ls "${AUTH_DB}?v=${RANDOM}" | tr -d '\n\r ' | xargs)
