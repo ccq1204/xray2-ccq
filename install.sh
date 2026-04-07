@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 确保在管道模式下也能正常读取输入
+# 确保在管道模式下也能正常读取键盘输入
 exec < /dev/tty
 
 echo "======================================"
@@ -12,18 +12,17 @@ read -p "3. 请输入节点 ID (Node ID): " NODE_ID
 read -p "4. 请输入节点域名 (CertDomain): " CERT_DOMAIN
 echo "======================================"
 
-# 1. 强制清理旧环境并安装依赖
-systemctl stop V2bX 2>/dev/null
+# 1. 安装基础依赖
 apt update && apt install -y curl wget tar unzip
 
-# 2. 暴力下载并覆盖二进制文件
+# 2. 暴力安装 V2bX 程序 (确保命令路径正确)
 mkdir -p /usr/local/V2bX
 wget -O /usr/local/V2bX/V2bX-linux.zip https://github.com/wyx2685/V2bX/releases/download/v0.4.0/V2bX-linux-64.zip
 unzip -o /usr/local/V2bX/V2bX-linux.zip -d /usr/local/V2bX
 chmod +x /usr/local/V2bX/V2bX
 ln -sf /usr/local/V2bX/V2bX /usr/bin/V2bX
 
-# 3. 写入配置文件 (使用单引号包裹 EOF 防止变量在写入前被错误解析)
+# 3. 写入配置文件 (使用 ${变量} 确保输入被正确填入)
 mkdir -p /etc/V2bX
 cat <<EOF > /etc/V2bX/config.json
 {
@@ -61,13 +60,30 @@ cat <<EOF > /etc/V2bX/config.json
 }
 EOF
 
-# 4. 拉取规则文件
+# 4. 拉取你的固定规则文件
 BASE_URL="https://raw.githubusercontent.com/ccq1204/xray2-ccq/main"
-wget -q -O /etc/V2bX/sing_origin.json "${BASE_URL}/sing_origin.json"
-wget -q -O /etc/V2bX/route.json "${BASE_URL}/route.json"
-wget -q -O /etc/V2bX/dns.json "${BASE_URL}/dns.json"
+wget -q -O /etc/V2bX/sing_origin.json "\${BASE_URL}/sing_origin.json"
+wget -q -O /etc/V2bX/route.json "\${BASE_URL}/route.json"
+wget -q -O /etc/V2bX/dns.json "\${BASE_URL}/dns.json"
 
-# 5. 注册快捷命令 v2
+# 5. 修正 Systemd 服务 (核心修复点：增加了 server -c)
+cat <<EOF > /etc/systemd/system/V2bX.service
+[Unit]
+Description=V2bX Service
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/usr/local/V2bX
+ExecStart=/usr/local/V2bX/V2bX server -c /etc/V2bX/config.json
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 6. 注册快捷管理命令 v2 (修复 log 命令)
 cat <<EOF > /usr/bin/v2
 #!/bin/bash
 case "\$1" in
@@ -78,28 +94,13 @@ esac
 EOF
 chmod +x /usr/bin/v2
 
-# 6. 修正 Systemd 服务 (核心修复：增加 -config 参数)
-cat <<EOF > /etc/systemd/system/V2bX.service
-[Unit]
-Description=V2bX Service
-After=network.target
-
-[Service]
-User=root
-WorkingDirectory=/usr/local/V2bX
-ExecStart=/usr/local/V2bX/V2bX server -config /etc/V2bX/config.json
-Restart=on-failure
-RestartSec=10s
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
+# 7. 启动并显示结果
 systemctl daemon-reload
 systemctl enable V2bX
 systemctl restart V2bX
 
+clear
 echo "======================================"
-echo "✅ 部署修复完成！"
-echo "请执行: v2 log  查看是否 Success"
+echo "✅ 部署完成！"
+echo "输入 v2 log 查看对接日志"
 echo "======================================"
