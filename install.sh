@@ -1,22 +1,20 @@
 #!/bin/bash
 
-echo "---------- 开始 xray2 品牌化一键部署 ----------"
+# --- 1. 获取用户输入的四个关键参数 ---
+echo "======================================"
+echo "      V2bX 节点一键配置向导"
+echo "======================================"
+read -p "1. 请输入面板地址 (如 https://v2.com): " PANEL_URL
+read -p "2. 请输入面板 API Key: " PANEL_KEY
+read -p "3. 请输入节点 ID (Node ID): " NODE_ID
+read -p "4. 请输入节点域名 (CertDomain): " CERT_DOMAIN
+echo "======================================"
 
-# 1. 基础环境安装
-apt update && apt install -y curl wget tar timedatectl
-timedatectl set-ntp true
+# --- 2. 基础安装与目录创建 ---
+apt update && apt install -y curl wget tar
+mkdir -p /etc/V2bX
 
-# 2. 交互式获取对接信息 (用户只需要填这几个)
-read -p "请输入机场网址 (例如 https://v2.com): " PANEL_URL
-read -p "请输入对接 API Key: " PANEL_KEY
-read -p "请输入节点 Node ID: " NODE_ID
-read -p "请输入节点证书域名 (例如 node.cc): " CERT_DOMAIN
-
-# 3. 安装 V2bX 核心 (静默安装)
-wget -N https://raw.githubusercontent.com/wyx2685/V2bX-script/master/install.sh
-printf "n\n" | bash install.sh
-
-# 4. 强制写入你给我的那个 config.json 模板
+# --- 3. 动态生成 config.json (其他所有选项都保持你提供的格式) ---
 cat > /etc/V2bX/config.json <<EOF
 {
     "Log": {
@@ -66,35 +64,26 @@ cat > /etc/V2bX/config.json <<EOF
 }
 EOF
 
-# 5. 拉取你 GitHub 仓库里的其他 JSON 规则 (必须确保仓库里有这些文件)
+# --- 4. 拉取你 GitHub 里的固定规则文件 (这些文件不需要变) ---
 BASE_URL="https://raw.githubusercontent.com/ccq1204/xray2-ccq/main"
 declare -a files=("sing_origin.json" "route.json" "dns.json")
 
 for file in "\${files[@]}"; do
     wget -q -O /etc/V2bX/\$file "\$BASE_URL/\$file"
-    echo "已同步规则文件: \$file"
+    echo "已拉取固定规则: \$file"
 done
 
-# 6. 【核心功能】注册一键唤起命令 [ v2 ]
+# --- 5. 注册快捷命令 v2 ---
 cat > /usr/bin/v2 <<EOF
 #!/bin/bash
 case "\$1" in
     log) V2bX log ;;
     restart) V2bX restart ;;
-    status) V2bX status ;;
-    *) V2bX ;; # 默认呼出你截图里那个 0-17 的蓝色菜单
+    *) V2bX ;;
 esac
 EOF
 chmod +x /usr/bin/v2
 
-# 7. 启动服务
+# --- 6. 启动服务 ---
 V2bX restart
-clear
-
-echo "=================================================="
-echo "✅ 部署完成！"
-echo "1. 规则同步：Sing-box 规则已从仓库拉取"
-echo "2. 管理命令：现在直接输入 [ v2 ] 呼出菜单"
-echo "3. 快捷日志：输入 [ v2 log ] 查看对接是否成功"
-echo "=================================================="
-v2 status
+echo "部署完成！输入 v2 log 查看对接状态。"
