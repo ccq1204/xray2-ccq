@@ -1,6 +1,8 @@
 #!/bin/bash
 
-# --- 1. 获取用户输入的四个关键参数 ---
+# 修复管道执行时 read 失效的问题
+exec < /dev/tty
+
 echo "======================================"
 echo "      V2bX 节点一键配置向导"
 echo "======================================"
@@ -10,19 +12,18 @@ read -p "3. 请输入节点 ID (Node ID): " NODE_ID
 read -p "4. 请输入节点域名 (CertDomain): " CERT_DOMAIN
 echo "======================================"
 
-# --- 2. 基础环境安装 ---
+# 1. 安装基础依赖
 apt update && apt install -y curl wget tar
 
-# --- 3. 安装 V2bX 核心 (直接使用官方安装并等待完成) ---
-# 强制先安装好 V2bX 二进制文件
+# 2. 安装 V2bX 核心 (换一种更稳的方法)
+echo "正在安装 V2bX 核心..."
 wget -N https://raw.githubusercontent.com/wyx2685/V2bX-script/master/install.sh
-# 模拟用户按 n，不让它自动生成那个破配置
-echo -e "n" | bash install.sh
+# 这一步是关键：确保二进制文件被安装
+bash install.sh <<EOF
+n
+EOF
 
-# --- 4. 确保目录存在 ---
-mkdir -p /etc/V2bX
-
-# --- 5. 写入你的自定义 config.json ---
+# 3. 写入你的自定义 config.json
 cat > /etc/V2bX/config.json <<EOF
 {
     "Log": { "Level": "error", "Output": "" },
@@ -59,32 +60,25 @@ cat > /etc/V2bX/config.json <<EOF
 }
 EOF
 
-# --- 6. 拉取固定规则 (修正变量识别问题) ---
+# 4. 同步规则文件 (硬编码下载，避免 $file 报错)
 BASE_URL="https://raw.githubusercontent.com/ccq1204/xray2-ccq/main"
-# 手动一个个下载，确保 100% 成功
-wget -q -O /etc/V2bX/sing_origin.json "\${BASE_URL}/sing_origin.json"
-wget -q -O /etc/V2bX/route.json "\${BASE_URL}/route.json"
-wget -q -O /etc/V2bX/dns.json "\${BASE_URL}/dns.json"
+wget -q -O /etc/V2bX/sing_origin.json "${BASE_URL}/sing_origin.json"
+wget -q -O /etc/V2bX/route.json "${BASE_URL}/route.json"
+wget -q -O /etc/V2bX/dns.json "${BASE_URL}/dns.json"
 
-# --- 7. 注册快捷命令 v2 (并兼容大小写) ---
+# 5. 创建快捷命令 v2 (关联绝对路径)
 cat > /usr/bin/v2 <<EOF
 #!/bin/bash
 case "\$1" in
     log) V2bX log ;;
     restart) V2bX restart ;;
-    status) V2bX status ;;
     *) V2bX ;;
 esac
 EOF
 chmod +x /usr/bin/v2
 
-# --- 8. 启动服务 ---
-/usr/local/bin/V2bX restart
-
-clear
-echo "=================================================="
-echo "✅ 部署完成！"
-echo "1. 请直接输入 [ v2 ] 呼出管理菜单"
-echo "2. 请直接输入 [ v2 log ] 查看对接日志"
-echo "=================================================="
-/usr/local/bin/V2bX status
+# 6. 重启并显示
+V2bX restart
+echo "--------------------------------------"
+echo "部署完成！输入 v2 log 查看状态。"
+V2bX status
