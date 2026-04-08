@@ -56,11 +56,25 @@ else
     done
 fi
 
-# --- [ 5. 品牌环境准备 ] ---
+# --- [ 5. 品牌环境准备 (全架构支持版) ] ---
 apt-get update -y && apt-get install -y curl wget tar unzip e2fsprogs psmisc
 killall -9 xray2_core V2bX 2>/dev/null
+
+# 检测 CPU 架构
+ARCH=$(uname -m)
+if [ "$ARCH" == "x86_64" ]; then
+    DOWNLOAD_URL="https://github.com/wyx2685/V2bX/releases/download/v0.4.0/V2bX-linux-64.zip"
+elif [ "$ARCH" == "aarch64" ]; then
+    DOWNLOAD_URL="https://github.com/wyx2685/V2bX/releases/download/v0.4.0/V2bX-linux-arm64-v8a.zip"
+else
+    echo "❌ 抱歉，暂不支持您的 CPU 架构: $ARCH"
+    exit 1
+fi
+
 mkdir -p /usr/local/xray2
-wget -O /usr/local/xray2/core.zip https://github.com/wyx2685/V2bX/releases/download/v0.4.0/V2bX-linux-64.zip
+echo "正在下载适合 $ARCH 架构的商业内核..."
+wget -O /usr/local/xray2/core.zip "$DOWNLOAD_URL"
+
 unzip -o /usr/local/xray2/core.zip -d /usr/local/xray2
 mv /usr/local/xray2/V2bX /usr/local/xray2/xray2_core
 chmod +x /usr/local/xray2/xray2_core
