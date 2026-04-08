@@ -19,9 +19,6 @@ echo -e "${BLUE}======================================================${PLAIN}"
 echo -e "${GREEN}          $BRAND_NAME 商业版高性能转发系统${PLAIN}"
 echo -e "          作者：${YELLOW}$AUTHOR${PLAIN}"
 echo -e "${BLUE}======================================================${PLAIN}"
-echo -e "  官网: ${YELLOW}$AD_URL${PLAIN} | 频道: ${YELLOW}$AD_TG${PLAIN}"
-echo -e "${BLUE}------------------------------------------------------${PLAIN}"
-
 exec < /dev/tty
 AUTH_LIST=$(curl -H "Cache-Control: no-cache" -Lfs --connect-timeout 10 "${AUTH_DB}?v=${RANDOM}" | tr -cd '[:alnum:]')
 
@@ -39,7 +36,7 @@ while [ $RETRY_COUNT -lt 3 ]; do
 done
 [ "$VALID_AUTH" = false ] && { echo -e "${RED}❌ 授权失效。${PLAIN}"; exit 1; }
 
-# --- [ 3. 核心：参数录入与精准清洗 ] ---
+# --- [ 3. 核心：精准参数获取 ] ---
 echo -e "${BLUE}------------------------------------------------------${PLAIN}"
 read -p "选择模式 (1.单节点 2.多节点): " DEPLOY_MODE
 
@@ -48,18 +45,20 @@ rm -f /etc/xray2/nodes.tmp 2>/dev/null
 
 function write_node_json() {
     local index=$1
-    echo -e "${YELLOW}---- 正在配置第 $index 个节点 ----${PLAIN}"
-    read -p "面板地址(ApiHost): " R_URL
-    read -p "面板密钥(ApiKey): " R_KEY
-    read -p "节点ID(NodeID): " R_ID
-    read -p "解析域名(CertDomain): " R_DOMAIN
-
-    # 仅去除首尾及中间空格，保留所有合法特殊字符
-    C_URL=$(echo "$R_URL" | sed 's/[[:space:]]//g' | tr -d '\r\n\x1b[' | sed 's/\/$//g')
+    echo -e "${YELLOW}---- 配置第 $index 个节点 ----${PLAIN}"
+    # 使用 xargs 去除首尾空格，不进行任何字符删除
+    read -p "面板地址(ApiHost): " RAW_URL
+    C_URL=$(echo "$RAW_URL" | xargs | sed 's/\/$//g')
     [[ "$C_URL" != http* ]] && C_URL="http://$C_URL"
-    C_KEY=$(echo "$R_KEY" | sed 's/[[:space:]]//g' | tr -d '\r\n\x1b[')
-    C_ID=$(echo "$R_ID" | tr -cd '0-9')
-    C_DOMAIN=$(echo "$R_DOMAIN" | sed 's/[[:space:]]//g' | tr -d '\r\n\x1b[')
+    
+    read -p "面板密钥(ApiKey): " RAW_KEY
+    C_KEY=$(echo "$RAW_KEY" | xargs)
+    
+    read -p "节点ID(NodeID): " RAW_ID
+    C_ID=$(echo "$RAW_ID" | tr -cd '0-9')
+    
+    read -p "解析域名(CertDomain): " RAW_DOMAIN
+    C_DOMAIN=$(echo "$RAW_DOMAIN" | xargs)
 
     JSON_STR="{\"Core\":\"sing\",\"ApiHost\":\"$C_URL\",\"ApiKey\":\"$C_KEY\",\"NodeID\":$C_ID,\"NodeType\":\"anytls\",\"Timeout\":30,\"ListenIP\":\"::\",\"SendIP\":\"0.0.0.0\",\"CertConfig\":{\"CertMode\":\"http\",\"CertDomain\":\"$C_DOMAIN\",\"CertFile\":\"/etc/xray2/sys_cert.dat\",\"KeyFile\":\"/etc/xray2/sys_key.dat\"}}"
     
@@ -74,8 +73,7 @@ else
 fi
 NODE_CONTENT=$(cat /etc/xray2/nodes.tmp)
 
-# --- [ 4. 全量补全：拉取原版 V2bX 所有依赖 ] ---
-echo -e "${YELLOW}正在同步全量配置文件与规则库...${PLAIN}"
+# --- [ 4. 依赖同步 ] ---
 apt-get update -y && apt-get install -y curl wget tar unzip e2fsprogs psmisc
 ARCH=$(uname -m)
 [ "$ARCH" == "x86_64" ] && D_URL="https://github.com/wyx2685/V2bX/releases/download/v0.4.0/V2bX-linux-64.zip" || D_URL="https://github.com/wyx2685/V2bX/releases/download/v0.4.0/V2bX-linux-arm64-v8a.zip"
@@ -86,28 +84,27 @@ unzip -o /usr/local/xray2/core.zip -d /usr/local/xray2
 mv /usr/local/xray2/V2bX /usr/local/xray2/xray2_core
 chmod +x /usr/local/xray2/xray2_core
 
-# 【11个核心依赖对齐】
+# 同步 11 个原版核心依赖
 wget -q -O /etc/xray2/kernel_node.bin https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/sing_origin.json
 wget -q -O /etc/xray2/route.json https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/route.json
 wget -q -O /etc/xray2/dns.json https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/dns.json
 wget -q -O /etc/xray2/custom_inbound.json https://raw.githubusercontent.com/wyx2685/V2bX/master/example_config/custom_inbound.json
 wget -q -O /etc/xray2/custom_outbound.json https://raw.githubusercontent.com/wyx2685/V2bX/master/example_config/custom_outbound.json
-# 同步数据库到 core 目录
 wget -q -O /usr/local/xray2/geoip.dat https://github.com/v2fly/geoip/releases/latest/download/geoip.dat
 wget -q -O /usr/local/xray2/geosite.dat https://github.com/v2fly/domain-list-community/releases/latest/download/geosite.dat
 
-# --- [ 5. 配置生成与物理过滤 ] ---
+# --- [ 5. 配置文件生成与物理脱水 ] ---
 chattr -i /etc/xray2/config.json 2>/dev/null
 S1=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 1000 | head -n 1)
 S2=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 1000 | head -n 1)
 printf '{"Log":{"Level":"error"},"Internal_Buffer_Cache":"%s","Cores":[{"Type":"sing","Log":{"Level":"error"},"OriginalPath":"/etc/xray2/kernel_node.bin"}],"Nodes":[%s],"Network_Token_Hash":"%s"}' "$S1" "$NODE_CONTENT" "$S2" > /etc/xray2/config.json
-# 物理级清洗：抹除非打印字符
+# 物理级清洗：只删除非打印控制字符，不删除任何数字和路径符号
 sed -i 's/[^[:print:]]//g' /etc/xray2/config.json
 chmod 400 /etc/xray2/config.json
 chattr +i /etc/xray2/config.json 2>/dev/null
 rm -f /etc/xray2/nodes.tmp
 
-# --- [ 6. 管理工具 x2 (纯净回归版) ] ---
+# --- [ 6. 维护工具 x2 (绝对稳定版) ] ---
 cat <<EOF > /usr/bin/x2
 #!/bin/bash
 case "\$1" in
@@ -115,16 +112,16 @@ case "\$1" in
     restart) systemctl stop xray2; killall -9 xray2_core 2>/dev/null; systemctl start xray2; echo "重启成功" ;;
     stop) systemctl stop xray2; echo "已停止" ;;
     start) systemctl start xray2; echo "已启动" ;;
-    uninstall) chattr -i /etc/xray2/config.json 2>/dev/null; rm -rf /usr/local/xray2 /etc/xray2 /usr/bin/x2 /etc/systemd/system/xray2.service; echo "已彻底注销" ;;
+    uninstall) chattr -i /etc/xray2/config.json 2>/dev/null; rm -rf /usr/local/xray2 /etc/xray2 /usr/bin/x2 /etc/systemd/system/xray2.service; echo "已卸载" ;;
     *) echo "指令: x2 {log | restart | stop | start | uninstall}" ;;
 esac
 EOF
 chmod +x /usr/bin/x2
 
-# --- [ 7. 系统服务 ] ---
+# --- [ 7. 系统服务启动 ] ---
 cat <<EOF > /etc/systemd/system/xray2.service
 [Unit]
-Description=xray2 System Service
+Description=xray2 Forward Service
 After=network.target
 [Service]
 User=root
@@ -147,6 +144,5 @@ echo -e "------------------------------------------------------"
 echo -e "${YELLOW}管理指令：${PLAIN}"
 echo -e "  查看日志: ${GREEN}x2 log${PLAIN}"
 echo -e "  重启服务: ${GREEN}x2 restart${PLAIN}"
-echo -e "  停止服务: ${GREEN}x2 stop${PLAIN}"
 echo -e "  卸载脚本: ${GREEN}x2 uninstall${PLAIN}"
 echo -e "${GREEN}======================================================${PLAIN}"
