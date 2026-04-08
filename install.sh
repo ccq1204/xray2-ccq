@@ -13,7 +13,7 @@ YELLOW="\033[33m"
 BLUE="\033[34m"
 PLAIN="\033[0m"
 
-# --- [ 2. 授权验证 ] ---
+# --- [ 2. 授权验证 (防抖增强版) ] ---
 clear
 echo -e "${BLUE}======================================================${PLAIN}"
 echo -e "${GREEN}          $BRAND_NAME 商业版高性能转发系统${PLAIN}"
@@ -21,16 +21,31 @@ echo -e "${BLUE}======================================================${PLAIN}"
 echo -e "  极昼流量转发官网: ${YELLOW}$AD_URL${PLAIN}"
 echo -e "  官方 Telegram 频道: ${YELLOW}$AD_TG${PLAIN}"
 echo -e "${BLUE}------------------------------------------------------${PLAIN}"
-read -p "请输入您的授权码 (Auth Key): " USER_INPUT
-CLEAN_INPUT=$(echo -n "$USER_INPUT" | tr -cd '[:alnum:]')
-AUTH_LIST=$(curl -H "Cache-Control: no-cache" -Ls "${AUTH_DB}?v=${RANDOM}" | tr -cd '[:alnum:]')
 
-if [[ "$AUTH_LIST" == *"$CLEAN_INPUT"* ]] && [ -n "$CLEAN_INPUT" ]; then
-    echo -e "${GREEN}✅ 授权验证成功！${PLAIN}"
-else
-    echo -e "${RED}❌ 授权验证失败！请访问 $AD_URL 获取授权。${PLAIN}"
-    exit 1
-fi
+# 强制重定向输入流到当前终端，防止 curl | bash 导致的输入跳过
+exec < /dev/tty
+
+RETRY_COUNT=0
+while [ $RETRY_COUNT -lt 3 ]; do
+    read -p "请输入您的授权码 (Auth Key): " USER_INPUT
+    CLEAN_INPUT=$(echo -n "$USER_INPUT" | tr -cd '[:alnum:]')
+    
+    # 获取远程列表 (增加缓存控制和超时容错)
+    AUTH_LIST=$(curl -H "Cache-Control: no-cache" -Lfs --connect-timeout 10 "${AUTH_DB}?v=${RANDOM}" | tr -cd '[:alnum:]')
+
+    if [[ "$AUTH_LIST" == *"$CLEAN_INPUT"* ]] && [ -n "$CLEAN_INPUT" ]; then
+        echo -e "${GREEN}✅ 授权验证成功！${PLAIN}"
+        break
+    else
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -lt 3 ]; then
+            echo -e "${RED}❌ 验证失败，请检查授权码并重试 ($RETRY_COUNT/3)${PLAIN}"
+        else
+            echo -e "${RED}❌ 连续失败，请访问 $AD_URL 获取支持。${PLAIN}"
+            exit 1
+        fi
+    fi
+done
 
 # --- [ 3. 模式选择 ] ---
 echo -e "${BLUE}------------------------------------------------------${PLAIN}"
@@ -40,7 +55,6 @@ echo -e "  ${GREEN}2.${PLAIN} 多节点冗余模式 (支持多API负载均衡)"
 read -p "请输入数字 (1-2): " DEPLOY_MODE
 
 # --- [ 4. 参数获取与自动纠错 ] ---
-exec < /dev/tty
 NODE_JSON_CONFIG=""
 
 function get_node_config() {
@@ -51,7 +65,7 @@ function get_node_config() {
     read -p "请输入节点 ID (NodeID): " P_ID
     read -p "请输入解析域名 (CertDomain): " P_DOMAIN
 
-    # 自动修复 URL 格式
+    # 自动修复格式
     P_URL=$(echo "$P_URL" | sed 's/\/$//g')
     [[ "$P_URL" != http* ]] && P_URL="https://$P_URL"
     P_KEY=$(echo "$P_KEY" | tr -d ' ')
@@ -71,8 +85,8 @@ else
     done
 fi
 
-# --- [ 5. 系统性能调优 ] ---
-echo -e "${YELLOW}正在优化系统内核参数以提升转发性能...${PLAIN}"
+# --- [ 5. 系统性能优化 ] ---
+echo -e "${YELLOW}正在优化系统内核参数并安装依赖...${PLAIN}"
 apt-get update -y && apt-get install -y curl wget tar unzip e2fsprogs psmisc
 # 开启 BBR
 if ! grep -q "net.core.default_qdisc=fq" /etc/sysctl.conf; then
@@ -80,7 +94,7 @@ if ! grep -q "net.core.default_qdisc=fq" /etc/sysctl.conf; then
     echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
     sysctl -p >/dev/null 2>&1
 fi
-# 提高文件句柄数
+# 调优文件句柄
 sed -i '/soft nofile/d' /etc/security/limits.conf
 sed -i '/hard nofile/d' /etc/security/limits.conf
 echo "* soft nofile 65535" >> /etc/security/limits.conf
@@ -104,23 +118,27 @@ mv /usr/local/xray2/V2bX /usr/local/xray2/xray2_core
 chmod +x /usr/local/xray2/xray2_core
 ln -sf /usr/local/xray2/xray2_core /usr/bin/xray2
 
-# --- [ 7. 核心配置深度混淆 ] ---
+# --- [ 7. 核心配置：深度换皮混淆 ] ---
 mkdir -p /etc/xray2
 chattr -i /etc/xray2/config.json 2>/dev/null
 S1=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 1000 | head -n 1)
 S2=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 1000 | head -n 1)
+
+# 生成看似乱码的 JSON，包含 sing 关键字但极难阅读
 cat <<EOF > /etc/xray2/config.json
 {"Log":{"Level":"error"},"Internal_Buffer_Cache":"$S1","Cores":[{"Type":"sing","Log":{"Level":"error"},"OriginalPath":"/etc/xray2/kernel_node.bin"}],"Nodes":[$NODE_JSON_CONFIG],"Network_Token_Hash":"$S2"}
 EOF
+
+# 锁定权限：禁止手动修改，禁止小白看懂
 chmod 400 /etc/xray2/config.json
 chattr +i /etc/xray2/config.json 2>/dev/null
 
-# 同步伪装文件
+# 同步并重命名内核配置文件（深度隐藏 sing 痕迹）
 wget -q -O /etc/xray2/kernel_node.bin https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/sing_origin.json
 wget -q -O /etc/xray2/route_rules.bin https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/route.json
 wget -q -O /etc/xray2/dns_config.bin https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/dns.json
 
-# --- [ 8. 服务化配置 ] ---
+# --- [ 8. 系统服务化 ] ---
 cat <<EOF > /etc/systemd/system/xray2.service
 [Unit]
 Description=xray2 System Service
@@ -135,31 +153,34 @@ RestartSec=5s
 WantedBy=multi-user.target
 EOF
 
-# --- [ 9. 增强型快捷指令 x2 ] ---
+# --- [ 9. 管理快捷菜单 x2 ] ---
 cat <<EOF > /usr/bin/x2
 #!/bin/bash
 GREEN="\033[32m"
 RED="\033[31m"
+YELLOW="\033[33m"
 PLAIN="\033[0m"
 case "\$1" in
     log) journalctl -u xray2 -f ;;
-    restart) systemctl stop xray2; killall -9 xray2_core 2>/dev/null; systemctl start xray2; echo -e "\${GREEN}已重新启动服务\${PLAIN}" ;;
-    stop) systemctl stop xray2; echo -e "\${RED}转发服务已停止\${PLAIN}" ;;
+    start) systemctl start xray2 ;;
+    stop) systemctl stop xray2 ;;
+    restart) systemctl stop xray2; killall -9 xray2_core 2>/dev/null; systemctl start xray2; echo -e "\${GREEN}已成功重启转发引擎\${PLAIN}" ;;
     uninstall)
         read -p "确定彻底卸载并注销授权吗? (y/n): " res
         if [ "\$res" == "y" ]; then
             systemctl disable xray2 --now
             chattr -i /etc/xray2/config.json 2>/dev/null
             rm -rf /usr/local/xray2 /etc/xray2 /etc/systemd/system/xray2.service /usr/bin/x2
-            echo -e "\${GREEN}✅ 所有商业版组件已从系统中彻底移除。\${PLAIN}"
+            echo -e "\${GREEN}✅ 商业版已从系统中彻底移除。\${PLAIN}"
         fi ;;
     *)
         echo -e "\${GREEN}===============================${PLAIN}"
-        echo -e "\${GREEN}   $BRAND_NAME 商业版快捷菜单\${PLAIN}"
+        echo -e "\${GREEN}   $BRAND_NAME 商业管理菜单\${PLAIN}"
         echo -e "\${GREEN}===============================${PLAIN}"
-        echo -e "  x2 log       - 查看实时运行日志"
-        echo -e "  x2 restart   - 重启转发引擎"
-        echo -e "  x2 stop      - 停止当前转发"
+        echo -e "  x2 log       - 查看内核实时状态"
+        echo -e "  x2 restart   - 重启转发加密链路"
+        echo -e "  x2 stop      - 停止当前服务"
+        echo -e "  x2 start     - 启动转发服务"
         echo -e "  x2 uninstall - 彻底卸载与清理"
         echo -e "\${GREEN}===============================${PLAIN}"
         ;;
@@ -171,17 +192,18 @@ systemctl daemon-reload
 systemctl enable xray2
 systemctl restart xray2
 
-# --- [ 10. 安装完成输出 ] ---
+# --- [ 10. 安装完成总结输出 ] ---
 clear
 echo -e "${GREEN}======================================================${PLAIN}"
 echo -e "${GREEN}✅ $BRAND_NAME 商业旗舰版部署成功！${PLAIN}"
 echo -e "${BLUE}------------------------------------------------------${PLAIN}"
-echo -e "${YELLOW}系统优化已完成：${PLAIN}"
-echo -e "  - BBR 加速: 已开启"
-echo -e "  - 并发连接: 已调优 (65535)"
-echo -e "  - 配置文件: 已加密并锁定"
+echo -e "${YELLOW}已为您完成以下商业级优化：${PLAIN}"
+echo -e "  - BBR 高速拥塞控制: ${GREEN}已启用${PLAIN}"
+echo -e "  - 系统并发上限 (ulimit): ${GREEN}65535${PLAIN}"
+echo -e "  - 全架构适配: ${GREEN}$ARCH${PLAIN}"
+echo -e "  - 配置文件: ${GREEN}已混淆并物理锁定${PLAIN}"
 echo -e "${BLUE}------------------------------------------------------${PLAIN}"
-echo -e "管理指令: ${GREEN}x2${PLAIN} (输入 x2 调出菜单)"
+echo -e "  您可以输入快捷键 [ ${GREEN}x2${PLAIN} ] 随时管理您的节点"
 echo -e "${BLUE}------------------------------------------------------${PLAIN}"
 echo -e "官网: $AD_URL | TG: $AD_TG"
 echo -e "${GREEN}======================================================${PLAIN}"
