@@ -36,7 +36,7 @@ while [ $RETRY_COUNT -lt 3 ]; do
 done
 [ "$VALID_AUTH" = false ] && { echo -e "${RED}❌ 授权失效。${PLAIN}"; exit 1; }
 
-# --- [ 3. 核心：参数清洗与物理隔离 ] ---
+# --- [ 3. 参数录入 ] ---
 echo -e "${BLUE}------------------------------------------------------${PLAIN}"
 read -p "选择模式 (1.单节点 2.多节点): " DEPLOY_MODE
 
@@ -46,12 +46,11 @@ rm -f /etc/xray2/nodes.tmp 2>/dev/null
 function write_node_json() {
     local index=$1
     echo -e "${YELLOW}---- 配置第 $index 个节点 ----${PLAIN}"
-    read -p "面板地址(如 http://43.164.132.89:1007): " R_URL
+    read -p "面板地址(ApiHost): " R_URL
     read -p "面板密钥(ApiKey): " R_KEY
     read -p "节点ID(NodeID): " R_ID
     read -p "解析域名(CertDomain): " R_DOMAIN
 
-    # 深度清洗：仅去除多余空格和 ANSI 码，保留所有数字和符号
     C_URL=$(echo "$R_URL" | sed 's/[[:space:]]//g' | tr -d '\r\n\x1b[' | sed 's/\/$//g')
     [[ "$C_URL" != http* ]] && C_URL="http://$C_URL"
     C_KEY=$(echo "$R_KEY" | sed 's/[[:space:]]//g' | tr -d '\r\n\x1b[')
@@ -71,31 +70,27 @@ else
 fi
 NODE_CONTENT=$(cat /etc/xray2/nodes.tmp)
 
-# --- [ 4. 全量补全：拉取原版 V2bX 所有依赖文件 ] ---
-echo -e "${YELLOW}正在同步全量配置文件与规则库...${PLAIN}"
+# --- [ 4. 全量补全：拉取原版 V2bX 所有依赖 ] ---
 apt-get update -y && apt-get install -y curl wget tar unzip e2fsprogs psmisc
-
-# 拉取核心二进制与数据包
 ARCH=$(uname -m)
 [ "$ARCH" == "x86_64" ] && D_URL="https://github.com/wyx2685/V2bX/releases/download/v0.4.0/V2bX-linux-64.zip" || D_URL="https://github.com/wyx2685/V2bX/releases/download/v0.4.0/V2bX-linux-arm64-v8a.zip"
+
 mkdir -p /usr/local/xray2
 wget -q -O /usr/local/xray2/core.zip "$D_URL"
 unzip -o /usr/local/xray2/core.zip -d /usr/local/xray2
 mv /usr/local/xray2/V2bX /usr/local/xray2/xray2_core
 chmod +x /usr/local/xray2/xray2_core
 
-# 【全量文件对齐】将你图片中所有的 11 个核心文件全部同步
-echo -e "${YELLOW}正在同步核心规则链路 (11 Files)...${PLAIN}"
+# 核心规则对齐
 wget -q -O /etc/xray2/kernel_node.bin https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/sing_origin.json
 wget -q -O /etc/xray2/route.json https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/route.json
 wget -q -O /etc/xray2/dns.json https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/dns.json
 wget -q -O /etc/xray2/custom_inbound.json https://raw.githubusercontent.com/wyx2685/V2bX/master/example_config/custom_inbound.json
 wget -q -O /etc/xray2/custom_outbound.json https://raw.githubusercontent.com/wyx2685/V2bX/master/example_config/custom_outbound.json
-# 基础数据库
 wget -q -O /usr/local/xray2/geoip.dat https://github.com/v2fly/geoip/releases/latest/download/geoip.dat
 wget -q -O /usr/local/xray2/geosite.dat https://github.com/v2fly/domain-list-community/releases/latest/download/geosite.dat
 
-# --- [ 5. 核心配置生成与物理脱水 ] ---
+# --- [ 5. 配置生成与物理脱水 ] ---
 chattr -i /etc/xray2/config.json 2>/dev/null
 S1=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 1000 | head -n 1)
 S2=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 1000 | head -n 1)
@@ -105,33 +100,21 @@ chmod 400 /etc/xray2/config.json
 chattr +i /etc/xray2/config.json 2>/dev/null
 rm -f /etc/xray2/nodes.tmp
 
-# --- [ 6. 智能诊断管理 x2 ] ---
+# --- [ 6. 维护脚本 x2 (回归稳定版) ] ---
 cat <<EOF > /usr/bin/x2
 #!/bin/bash
-GREEN="\033[32m"
-RED="\033[31m"
-PLAIN="\033[0m"
 case "\$1" in
-    log)
-        echo -e "\${GREEN}---- 正在精准诊断 (按 Ctrl+C 退出) ----\${PLAIN}"
-        journalctl -u xray2 -f | while read line; do
-            echo "\$line" | sed -u '
-                /timed out/ s/.*/\x1b[31m【❌ 地址超时】无法连接面板，请检查 IP/端口/防火墙。\x1b[0m/
-                /401 Unauthorized/ s/.*/\x1b[31m【❌ 密钥错误】ApiKey 填错，请核对后重装。\x1b[0m/
-                /node not found/ s/.*/\x1b[31m【❌ ID错误】面板中无此 NodeID。\x1b[0m/
-                /Obtaining bundled SAN certificate/ s/.*/\x1b[32m【💡 正在申请证书】正在申请加密链接，请稍后...\x1b[0m/
-            '
-        done ;;
+    log) journalctl -u xray2 -f ;;
     restart) systemctl stop xray2; killall -9 xray2_core 2>/dev/null; systemctl start xray2; echo "重启成功" ;;
-    stop) systemctl stop xray2; echo "转发已停" ;;
-    start) systemctl start xray2; echo "转发已启" ;;
-    uninstall) chattr -i /etc/xray2/config.json 2>/dev/null; rm -rf /usr/local/xray2 /etc/xray2 /usr/bin/x2 /etc/systemd/system/xray2.service; echo "已完全注销" ;;
-    *) echo -e "维护指令: x2 {log | restart | stop | start | uninstall}" ;;
+    stop) systemctl stop xray2; echo "已停止" ;;
+    start) systemctl start xray2; echo "已启动" ;;
+    uninstall) chattr -i /etc/xray2/config.json 2>/dev/null; rm -rf /usr/local/xray2 /etc/xray2 /usr/bin/x2 /etc/systemd/system/xray2.service; echo "已完全卸载" ;;
+    *) echo "指令: x2 {log | restart | stop | start | uninstall}" ;;
 esac
 EOF
 chmod +x /usr/bin/x2
 
-# --- [ 7. 系统服务化 ] ---
+# --- [ 7. 系统服务 ] ---
 cat <<EOF > /etc/systemd/system/xray2.service
 [Unit]
 Description=xray2 Forward Service
@@ -150,11 +133,11 @@ systemctl daemon-reload && systemctl enable xray2 && systemctl restart xray2
 # --- [ 8. 成功面板 ] ---
 clear
 echo -e "${GREEN}======================================================${PLAIN}"
-echo -e "✅ $BRAND_NAME 商业旗舰版部署成功！ 作者：$AUTHOR"
+echo -e "✅ $BRAND_NAME 部署成功！ 作者：$AUTHOR"
 echo -e "------------------------------------------------------"
 echo -e "  官网: $AD_URL | 频道: $AD_TG"
 echo -e "------------------------------------------------------"
-echo -e "${YELLOW}管理指令：${PLAIN}"
+echo -e "${YELLOW}常用指令：${PLAIN}"
 echo -e "  查看日志: ${GREEN}x2 log${PLAIN}"
 echo -e "  重启服务: ${GREEN}x2 restart${PLAIN}"
 echo -e "  停止服务: ${GREEN}x2 stop${PLAIN}"
