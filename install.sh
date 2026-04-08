@@ -50,27 +50,23 @@ echo -e "  ${GREEN}1.${PLAIN} 单节点模式"
 echo -e "  ${GREEN}2.${PLAIN} 多节点冗余模式"
 read -p "请输入数字 (1-2): " DEPLOY_MODE
 
-# --- [ 4. 参数获取：彻底物理隔离颜色代码 ] ---
+# --- [ 4. 参数获取与过滤 ] ---
 NODE_JSON_CONFIG=""
 
 function get_node_config() {
     local index=$1
-    # 提示语直接用 echo 打印，不进入变量
     echo -e "${YELLOW}---- 正在配置第 $index 个节点 ----${PLAIN}"
-    
     read -p "请输入面板地址 (ApiHost): " RAW_URL
     read -p "请输入面板密钥 (ApiKey): " RAW_KEY
     read -p "请输入节点 ID (NodeID): " RAW_ID
     read -p "请输入解析域名 (CertDomain): " RAW_DOMAIN
 
-    # 深度清洗所有不可见字符和转义符
     local C_URL=$(echo "$RAW_URL" | tr -d '\r\n\x1b[' | sed 's/\/$//g' | xargs)
     [[ "$C_URL" != http* ]] && C_URL="https://$C_URL"
     local C_KEY=$(echo "$RAW_KEY" | tr -d '\r\n\x1b[ ' | xargs)
     local C_ID=$(echo "$RAW_ID" | tr -cd '0-9')
     local C_DOMAIN=$(echo "$RAW_DOMAIN" | tr -d '\r\n\x1b[ ' | xargs)
 
-    # 构造最纯净的 JSON 片段，不包含任何外部变量引用
     printf '{"Core":"sing","ApiHost":"%s","ApiKey":"%s","NodeID":%s,"NodeType":"anytls","Timeout":30,"ListenIP":"::","SendIP":"0.0.0.0","CertConfig":{"CertMode":"http","CertDomain":"%s","CertFile":"/etc/xray2/sys_cert.dat","KeyFile":"/etc/xray2/sys_key.dat"}}' "$C_URL" "$C_KEY" "$C_ID" "$C_DOMAIN"
 }
 
@@ -84,7 +80,7 @@ else
     done
 fi
 
-# --- [ 5. 系统优化与安装 ] ---
+# --- [ 5. 环境与性能优化 ] ---
 echo -e "${YELLOW}正在优化系统参数并下载内核...${PLAIN}"
 apt-get update -y && apt-get install -y curl wget tar unzip e2fsprogs psmisc
 if ! grep -q "net.core.default_qdisc=fq" /etc/sysctl.conf; then
@@ -110,14 +106,16 @@ mv /usr/local/xray2/V2bX /usr/local/xray2/xray2_core
 chmod +x /usr/local/xray2/xray2_core
 ln -sf /usr/local/xray2/xray2_core /usr/bin/xray2
 
-# --- [ 7. 混淆配置文件生成 ] ---
+# --- [ 7. 核心配置生成与物理脱水 ] ---
 mkdir -p /etc/xray2
 chattr -i /etc/xray2/config.json 2>/dev/null
 S1=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 1000 | head -n 1)
 S2=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 1000 | head -n 1)
 
-# 使用 printf 写入，防止 echo 对转义符的二次解释
-printf '{"Log":{"Level":"error"},"Internal_Buffer_Cache":"%s","Cores":[{"Type":"sing","Log":{"Level":"error"},"OriginalPath":"/etc/xray2/kernel_node.bin"}],"Nodes":[%s],"Network_Token_Hash":"%s"}' "$S1" "$NODE_JSON_CONFIG" "$S2" > /etc/xray2/config.json
+# 使用临时文件并执行 ANSI 物理清除，彻底干掉 \x1b
+printf '{"Log":{"Level":"error"},"Internal_Buffer_Cache":"%s","Cores":[{"Type":"sing","Log":{"Level":"error"},"OriginalPath":"/etc/xray2/kernel_node.bin"}],"Nodes":[%s],"Network_Token_Hash":"%s"}' "$S1" "$NODE_JSON_CONFIG" "$S2" > /etc/xray2/config.tmp
+sed -i 's/\x1b\[[0-9;]*[a-zA-Z]//g' /etc/xray2/config.tmp
+mv /etc/xray2/config.tmp /etc/xray2/config.json
 
 chmod 400 /etc/xray2/config.json
 chattr +i /etc/xray2/config.json 2>/dev/null
@@ -152,6 +150,7 @@ case "\$1" in
     log) journalctl -u xray2 -f ;;
     restart) systemctl stop xray2; killall -9 xray2_core 2>/dev/null; systemctl start xray2; echo -e "\${GREEN}引擎已重启\${PLAIN}" ;;
     stop) systemctl stop xray2; echo -e "\${RED}服务已停止\${PLAIN}" ;;
+    start) systemctl start xray2; echo -e "\${GREEN}服务已启动\${PLAIN}" ;;
     uninstall)
         read -p "确定卸载吗? (y/n): " res
         if [ "\$res" == "y" ]; then
@@ -165,8 +164,9 @@ case "\$1" in
         echo -e "   $BRAND_NAME 商业管理菜单 | 作者：极昼"
         echo -e "\${GREEN}===============================${PLAIN}"
         echo -e "  x2 log       - 查看内核实时状态"
-        echo -e "  x2 restart   - 重启转发加密链路"
-        echo -e "  x2 stop      - 停止当前转发服务"
+        echo -e "  x2 restart   - 重启转发引擎"
+        echo -e "  x2 stop      - 停止转发服务"
+        echo -e "  x2 start     - 启动转发服务"
         echo -e "  x2 uninstall - 彻底卸载与清理"
         echo -e "\${GREEN}===============================${PLAIN}"
         ;;
@@ -178,9 +178,20 @@ systemctl daemon-reload
 systemctl enable xray2
 systemctl restart xray2
 
+# --- [ 10. 安装完成输出 - 全指令展示 ] ---
 clear
 echo -e "${GREEN}======================================================${PLAIN}"
 echo -e "${GREEN}✅ $BRAND_NAME 商业旗舰版部署成功！${PLAIN}"
 echo -e "${BLUE}------------------------------------------------------${PLAIN}"
-echo -e "  作者: ${YELLOW}$AUTHOR${PLAIN} | 维护指令: ${GREEN}x2${PLAIN}"
+echo -e "  作者: ${YELLOW}$AUTHOR${PLAIN}"
+echo -e "  官网: $AD_URL | TG: $AD_TG"
+echo -e "${BLUE}------------------------------------------------------${PLAIN}"
+echo -e "${YELLOW}常用管理指令：${PLAIN}"
+echo -e "  ${GREEN}x2 log${PLAIN}      - 查看实时日志"
+echo -e "  ${GREEN}x2 restart${PLAIN}  - 重启转发服务"
+echo -e "  ${GREEN}x2 stop${PLAIN}     - 停止转发服务"
+echo -e "  ${GREEN}x2 start${PLAIN}    - 启动转发服务"
+echo -e "  ${GREEN}x2 uninstall${PLAIN}- 彻底卸载脚本"
+echo -e "${BLUE}------------------------------------------------------${PLAIN}"
+echo -e "  PS: 配置文件已锁定，输入 ${GREEN}x2${PLAIN} 可调出详细菜单"
 echo -e "${GREEN}======================================================${PLAIN}"
