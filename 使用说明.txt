@@ -1,0 +1,7 @@
+1.修改config文件后需要清除缓存
+php artisan config:cache
+2.定时任务的设定
+每天
+php /www/wwwroot/v2board/artisan bob:util_day
+每分钟
+php /www/wwwroot/v2board/artisan bob:util_minute
