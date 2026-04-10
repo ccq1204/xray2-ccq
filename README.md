@@ -25,7 +25,8 @@
 
 ```bash
 bash <(curl -Ls [https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/install.sh](https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/install.sh))
-```📢 授权申请与技术支持
+```
+📢 授权申请与技术支持
 Xray2 授权码目前限时免费开放申请！
 
 👤 获取免费授权：请联系作者 Telegram @ccq1204 直连获取。
