@@ -31,9 +31,8 @@ bash <(curl -Ls https://raw.githubusercontent.com/ccq1204/xray2-ccq/main/install
 📢 授权申请与技术支持
 Xray2 授权码进tg群找作者免费提供！
 
-👤 获取免费授权：请联系作者 Telegram @ccq1204 直连获取。
-
-👥 加入技术阵地：与数千位行业运营者交流心得，获取最新优化方案。
+* 👤 **获取免费授权**：[点击联系作者 Telegram @ccq1204](https://t.me/ccq1204)
+* 🔗 **官方技术交流群**：[点击加入极昼流量转发群](https://t.me/jzllzf)
 
 🔗 极昼流量转发官方群：t.me/jzllzf
 
